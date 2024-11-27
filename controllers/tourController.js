@@ -80,19 +80,33 @@ exports.getTourPDF = async (req, res) => {
 
 exports.getAllTours = async (req, res) => {
     try {
-        const tours = await Tour.find(); // Fetch all tours from the database
-        if (tours.length === 0) {
-            // Send an empty array if no tours are found
-            return res.status(200).json([]);
+        // Optionally accept query parameters for filtering
+        const query = req.query;
+        const filter = {};
+
+        // Example of adding filtering capability
+        if (query.category) {
+            filter.category = query.category;
         }
-        // Send only the tours data as an array
+        if (query.price) {
+            filter.price = { $lte: query.price }; // Assuming you want tours under a certain price
+        }
+console.log('Filter:', filter);
+        const tours = await Tour.find(filter); // Fetch tours from the database with filters if any
+console.log('Tours:', tours);
+        // Check if the result array is empty and respond accordingly
+        if (tours.length === 0) {
+            return res.status(404).json({ message: 'No tours found matching the criteria' });
+        }
+
+        // Send the found tours as an array
         res.status(200).json(tours);
     } catch (error) {
-        console.error(error);
-        // Send an empty array in case of any error
-        res.status(500).json([]);
+        console.error('Failed to fetch tours:', error);
+        res.status(500).json({ error: 'Server error', message: error.message });
     }
 };
+
 
 exports.getTour = async (req, res) => {
     try {
