@@ -2,13 +2,14 @@ const express = require('express');
 const dotenv = require('dotenv');
 const connectDB = require('./config/database');
 const tourRoutes = require('./routes/tourRoutes');
-
+const cors = require('cors');
 dotenv.config();
 
 // Connect to MongoDB
 connectDB();
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads')); // Serve static files for PDF retrieval
 app.use('/api', tourRoutes); // Mount routes
