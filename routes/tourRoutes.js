@@ -15,5 +15,6 @@ router.post(
 
 // Route to retrieve the PDF by tour ID
 router.get('/tours/:id/pdf', tourController.getTourPDF);
-
+router.get('/tours', tourController.getAllTours);
+router.get('/tours/:id', tourController.getTour);
 module.exports = router;
