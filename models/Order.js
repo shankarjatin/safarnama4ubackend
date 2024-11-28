@@ -1,3 +1,4 @@
+// models/Order.js
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
@@ -8,6 +9,7 @@ const orderSchema = new mongoose.Schema({
         price: Number
     }],
     totalAmount: Number,
+    paymentStatus: { type: String, default: 'Pending' }, // New field to track payment status
     pdfSent: { type: Boolean, default: false }
 });
 
