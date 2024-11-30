@@ -2,13 +2,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const Tour = require('../models/tourModel');
-// const twilio = require('twilio');
-const path = require('path');
-const fs = require('fs');
 const axios = require('axios');
-
-// Twilio Configuration
-
 
 // Create a new order and return payment parameters
 exports.createOrder = async (req, res) => {
@@ -27,14 +21,31 @@ exports.createOrder = async (req, res) => {
             await user.save();
         }
 
-        // Create a new order
+        // Prepare cart items with product details
+        const populatedCartItems = await Promise.all(cartItems.map(async (item) => {
+            const product = await Tour.findById(item._id);
+            if (!product) {
+                throw new Error('Product not found');
+            }
+
+            return {
+                product: product._id,
+                quantity: item.quantity,
+                price: product.price
+            };
+        }));
+
+        // Create a new order with product details
         const newOrder = new Order({
             user: user._id,
-            cartItems,
-            totalAmount: totalPrice
+            cartItems: populatedCartItems,
+            totalAmount: totalPrice,
+            paymentStatus: 'Pending'  // Initial status before payment
         });
 
         await newOrder.save();
+
+        // Link the order to the user
         user.orders.push(newOrder);
         await user.save();
 
@@ -53,9 +64,7 @@ exports.createOrder = async (req, res) => {
 
         // Generate hash
         const hashString = `${paymentParams.key}|${paymentParams.txnid}|${paymentParams.amount}|${paymentParams.productinfo}|${paymentParams.firstname}|${paymentParams.email}|||||||||||${process.env.PAYU_MERCHANT_SALT}`;
-       console.log(hashString);
         const hash = crypto.createHash('sha512').update(hashString).digest('hex');
-        console.log("hash", hash)
         paymentParams.hash = hash;
 
         // Respond with payment parameters
@@ -71,41 +80,17 @@ exports.createOrder = async (req, res) => {
 
 // Handle PayU payment success callback
 exports.paymentSuccess = async (req, res) => {
-    // Receive parameters from PayU
-    const receivedParams = req.body
-    // {
-        
-    //     // status: req.body.status,
-    //     // email: req.body.email,
-    //     // productinfo: req.body.productinfo,
-    //     // amount: req.body.amount,
-    //     // txnid: req.body.txnid,
-    //     // key: process.env.PAYU_MERCHANT_KEY, // Your PayU Merchant Key
-    //     // salt: process.env.PAYU_MERCHANT_SALT, // Your PayU Merchant Salt
-    //     // hash: req.body.hash,
-    // };
+    const receivedParams = req.body;
 
-    console.log('Received Params:', receivedParams);
-
-    // Ensure the 'hash' parameter is present in the response
     if (!receivedParams.hash) {
         return res.status(400).send('Hash parameter is missing');
     }
 
-    // Construct the hash string according to PayU's expected format
     const hashString = `${receivedParams.key}|${receivedParams.txnid}|${receivedParams.amount}|${receivedParams.productinfo}|${receivedParams.firstname}|${receivedParams.email}|||||||||||${process.env.PAYU_MERCHANT_SALT}`;
+    const generatedHash = crypto.createHash('sha512').update(hashString).digest('hex');
 
-    console.log('Hash String:', hashString);
-
-    // Generate the hash using SHA-512
-    const generatedHash  = crypto.createHash('sha512').update(hashString).digest('hex');
-    console.log('Generated Hash:', generatedHash);
-    console.log('Received Hash:', receivedParams.hash);
-
-    // Compare the generated hash with the received hash
     // if (generatedHash !== receivedParams.hash) {
-    //     console.error('Hash mismatch: Invalid transaction');
-    //     return res.status(400).send('Invalid transaction');
+    //     return res.status(400).send('Hash mismatch');
     // }
 
     try {
@@ -115,31 +100,52 @@ exports.paymentSuccess = async (req, res) => {
             return res.status(404).json({ message: 'Order not found' });
         }
 
-        // Update payment status
+        // Update payment status to successful
         order.paymentStatus = 'Successful';
-        await order.save();
 
-        // Update the user with purchased product info
+        // Update the user with the purchased products and clear the cart
         const user = await User.findById(order.user);
         if (user) {
-            user.orders.push(order);
-            user.cartItems = [];  // Clear cart items after successful purchase
+            // Only update the user's orders and cart if not already done
+            if (!user.orders.includes(order._id)) {
+                user.orders.push(order);  // Add the order to the user's orders
+            }
+
+            // Remove the purchased items from the cart (empty cart)
+            order.cartItems.forEach(item => {
+                user.cartItems = user.cartItems.filter(cartItem => cartItem.product.toString() !== item.product.toString());
+            });
+
+            // Clear the cart after purchase
+            user.cartItems = [];
             await user.save();
         }
 
-        // Send back a success message to frontend
-        res.json({
-            message: "Payment successful, order has been saved.",
-            orderDetails: {
-                productName: order.cartItems.map(item => item.product.name),
-                totalAmount: order.totalAmount,
-                user: {
-                    name: user.name,
-                    email: user.email,
-                    phone: user.phone,
-                }
-            }
-        });
+        
+        // Save the updated order
+        await order.save();
+
+        // Respond with success
+        console.log('Payment successful:', order);
+        // res.json({
+        //     message: "Payment successful, order has been saved.",
+        //     orderDetails: {
+        //         productName: order.cartItems.map(item => item.product.name),
+        //         totalAmount: order.totalAmount,
+        //         user: {
+        //             name: user.name,
+        //             email: user.email,
+        //             phone: user.phone,
+        //         }
+        //     }
+        // });
+
+        if ( order.paymentStatus = 'Successful'  ) {
+            const successMessage = `Payment Successful! Order ID:  Total: ₹${order.totalAmount}`;
+            return res.redirect(`http://localhost:5173/?status=success&message=${encodeURIComponent(successMessage)}`);
+          } else {
+            return res.redirect('http://localhost:5173/?status=failed&message=Payment failed. Please try again.');
+          }
 
     } catch (error) {
         console.error('Payment success handling failed:', error);
@@ -157,7 +163,7 @@ exports.paymentFailure = async (req, res) => {
             return res.status(404).json({ message: 'Order not found' });
         }
 
-        // Update payment status
+        // Update payment status to failed
         order.paymentStatus = 'Failed';
         await order.save();
 
