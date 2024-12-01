@@ -14,6 +14,7 @@ const tourSchema = new mongoose.Schema({
   content: { type: String },
   additionalImages: [String],
   pdfPath: { type: String }, // Path to the uploaded PDF file
+  available: { type: Boolean, required: true, default: true } // New field for availability, default is true
 });
 
 module.exports = mongoose.model('Tour', tourSchema);
