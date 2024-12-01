@@ -4,6 +4,7 @@ const Order = require('../models/Order');
 const Tour = require('../models/tourModel');
 const axios = require('axios');
 const { sendWhatsAppMessage } = require('../utils/sendWhatsapp');
+const { sendEmail } = require('../utils/sendMail');
 
 // Create a new order and return payment parameters
 exports.createOrder = async (req, res) => {
@@ -81,62 +82,69 @@ exports.createOrder = async (req, res) => {
 
 // Handle PayU payment success callback
 
+
 exports.paymentSuccess = async (req, res) => {
-    const receivedParams = req.body;
-  
-    if (!receivedParams.hash) {
-      return res.status(400).send('Hash parameter is missing');
+  const receivedParams = req.body;
+
+  if (!receivedParams.hash) {
+    return res.status(400).send('Hash parameter is missing');
+  }
+
+  const hashString = `${receivedParams.key}|${receivedParams.txnid}|${receivedParams.amount}|${receivedParams.productinfo}|${receivedParams.firstname}|${receivedParams.email}|||||||||||${process.env.PAYU_MERCHANT_SALT}`;
+  const generatedHash = crypto.createHash('sha512').update(hashString).digest('hex');
+
+  try {
+    const order = await Order.findById(receivedParams.txnid).populate('cartItems.product');
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
     }
-  
-    const hashString = `${receivedParams.key}|${receivedParams.txnid}|${receivedParams.amount}|${receivedParams.productinfo}|${receivedParams.firstname}|${receivedParams.email}|||||||||||${process.env.PAYU_MERCHANT_SALT}`;
-    const generatedHash = crypto.createHash('sha512').update(hashString).digest('hex');
-  
-    try {
-      const order = await Order.findById(receivedParams.txnid).populate('cartItems.product');
-      if (!order) {
-        return res.status(404).json({ message: 'Order not found' });
+
+    order.paymentStatus = 'Successful';
+    await order.save();
+
+    const user = await User.findById(order.user);
+    if (user) {
+      if (!user.orders.includes(order._id)) {
+        user.orders.push(order);
       }
-  
-      order.paymentStatus = 'Successful';
-      await order.save();
-  
-      const user = await User.findById(order.user);
-      if (user) {
-        if (!user.orders.includes(order._id)) {
-          user.orders.push(order);
-        }
-  
-        order.cartItems.forEach(item => {
-          user.cartItems = user.cartItems.filter(cartItem => cartItem.product.toString() !== item.product.toString());
-        });
-  
-        user.cartItems = [];
-        await user.save();
-      }
-  
-      const tourPromises = order.cartItems.map(async (item) => {
-        const tour = await Tour.findById(item.product);
-        if (tour && tour.pdfPath) {
-          return tour.pdfPath;  // Collect all PDFs for the products in the order
-        }
-        throw new Error('Tour PDF not found');
+
+      order.cartItems.forEach(item => {
+        user.cartItems = user.cartItems.filter(cartItem => cartItem.product.toString() !== item.product.toString());
       });
-  
-      const pdfPaths = await Promise.all(tourPromises);
-  
-      const successMessage = `Payment Successful! Order ID: ${order._id} Total: ₹${order.totalAmount}`;
-  
-      // Send all PDFs via WhatsApp (as attachments in one message)
-      await sendWhatsAppMessage(user.phone, pdfPaths);
-  
-      const successRedirectUrl = `http://localhost:5173/?status=success&message=${encodeURIComponent(successMessage)}`;
-      return res.redirect(successRedirectUrl);
-  
-    } catch (error) {
-      console.error('Payment success handling failed:', error);
-      res.status(500).json({ message: 'Failed to handle payment success' });
+
+      user.cartItems = [];
+      await user.save();
     }
-  };
+
+    const tourPromises = order.cartItems.map(async (item) => {
+      const tour = await Tour.findById(item.product);
+      if (tour && tour.pdfPath) {
+        return tour.pdfPath;  // Collect all PDFs for the products in the order
+      }
+      throw new Error('Tour PDF not found');
+    });
+
+    const pdfPaths = await Promise.all(tourPromises);
+
+    const successMessage = `Payment Successful! Order ID: ${order._id} Total: ₹${order.totalAmount}`;
+
+    // Send all PDFs via WhatsApp (as attachments in one message)
+    await sendWhatsAppMessage(user.phone, pdfPaths);
+
+    // Send email with PDF attachments
+    const emailSubject = `Your Order Receipt: ${order._id}`;
+    const emailText = `Hello ${user.name},\n\nYour payment was successful. Please find attached the receipt for your order.\n\nTotal: ₹${order.totalAmount}\nOrder ID: ${order._id}\n\nThank you for your purchase!`;
+    await sendEmail(user.email, emailSubject, emailText, pdfPaths);
+
+    const successRedirectUrl = `http://localhost:5173/?status=success&message=${encodeURIComponent(successMessage)}`;
+    return res.redirect(successRedirectUrl);
+
+  } catch (error) {
+    console.error('Payment success handling failed:', error);
+    res.status(500).json({ message: 'Failed to handle payment success' });
+  }
+};
+
 // Handle PayU payment failure callback
 exports.paymentFailure = async (req, res) => {
     const receivedParams = req.body;
