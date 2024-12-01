@@ -64,6 +64,58 @@ exports.createTour = async (req, res) => {
   }
 };
 
+// Update a tour's details by ID
+exports.updateTour = async (req, res) => {
+  try {
+    const { id } = req.params;  // Get the tour ID from URL parameters
+    const {
+      name,
+      category,
+      details,
+      duration,
+      days,
+      price,
+      image,
+      usp,
+      whyToChoose,
+      content,
+      additionalImages,
+      available,  // New field for availability
+    } = req.body;
+
+    // Find the tour by ID
+    const tour = await Tour.findById(id);
+    if (!tour) {
+      return res.status(404).json({ error: 'Tour not found' });
+    }
+
+    // Update the tour with new details
+    tour.name = name || tour.name;
+    tour.category = category || tour.category;
+    tour.details = details || tour.details;
+    tour.duration = duration || tour.duration;
+    tour.days = days || tour.days;
+    tour.price = price || tour.price;
+    tour.image = image || tour.image;
+    tour.usp = usp || tour.usp;
+    tour.whyToChoose = whyToChoose || tour.whyToChoose;
+    tour.content = content || tour.content;
+    tour.additionalImages = additionalImages ? JSON.parse(additionalImages) : tour.additionalImages;
+    if (available !== undefined) {
+      tour.available = available; // Update availability if provided
+    }
+
+    // Save the updated tour
+    await tour.save();
+
+    // Send success response
+    res.status(200).json({ success: 'Tour updated successfully', data: tour });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update tour' });
+  }
+};
+
   
 
 // Retrieve a tour's PDF by ID
