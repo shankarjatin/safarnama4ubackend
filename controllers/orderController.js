@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const Tour = require('../models/tourModel');
 const axios = require('axios');
+const { sendWhatsAppMessage } = require('../utils/sendWhatsapp');
 
 // Create a new order and return payment parameters
 exports.createOrder = async (req, res) => {
@@ -79,80 +80,63 @@ exports.createOrder = async (req, res) => {
 };
 
 // Handle PayU payment success callback
+
 exports.paymentSuccess = async (req, res) => {
     const receivedParams = req.body;
-
+  
     if (!receivedParams.hash) {
-        return res.status(400).send('Hash parameter is missing');
+      return res.status(400).send('Hash parameter is missing');
     }
-
+  
     const hashString = `${receivedParams.key}|${receivedParams.txnid}|${receivedParams.amount}|${receivedParams.productinfo}|${receivedParams.firstname}|${receivedParams.email}|||||||||||${process.env.PAYU_MERCHANT_SALT}`;
     const generatedHash = crypto.createHash('sha512').update(hashString).digest('hex');
-
-    // if (generatedHash !== receivedParams.hash) {
-    //     return res.status(400).send('Hash mismatch');
-    // }
-
+  
     try {
-        // Find the order using the txnid
-        const order = await Order.findById(receivedParams.txnid).populate('cartItems.product');
-        if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
+      const order = await Order.findById(receivedParams.txnid).populate('cartItems.product');
+      if (!order) {
+        return res.status(404).json({ message: 'Order not found' });
+      }
+  
+      order.paymentStatus = 'Successful';
+      await order.save();
+  
+      const user = await User.findById(order.user);
+      if (user) {
+        if (!user.orders.includes(order._id)) {
+          user.orders.push(order);
         }
-
-        // Update payment status to successful
-        order.paymentStatus = 'Successful';
-
-        // Update the user with the purchased products and clear the cart
-        const user = await User.findById(order.user);
-        if (user) {
-            // Only update the user's orders and cart if not already done
-            if (!user.orders.includes(order._id)) {
-                user.orders.push(order);  // Add the order to the user's orders
-            }
-
-            // Remove the purchased items from the cart (empty cart)
-            order.cartItems.forEach(item => {
-                user.cartItems = user.cartItems.filter(cartItem => cartItem.product.toString() !== item.product.toString());
-            });
-
-            // Clear the cart after purchase
-            user.cartItems = [];
-            await user.save();
+  
+        order.cartItems.forEach(item => {
+          user.cartItems = user.cartItems.filter(cartItem => cartItem.product.toString() !== item.product.toString());
+        });
+  
+        user.cartItems = [];
+        await user.save();
+      }
+  
+      const tourPromises = order.cartItems.map(async (item) => {
+        const tour = await Tour.findById(item.product);
+        if (tour && tour.pdfPath) {
+          return tour.pdfPath;  // Collect all PDFs for the products in the order
         }
-
-        
-        // Save the updated order
-        await order.save();
-
-        // Respond with success
-        console.log('Payment successful:', order);
-        // res.json({
-        //     message: "Payment successful, order has been saved.",
-        //     orderDetails: {
-        //         productName: order.cartItems.map(item => item.product.name),
-        //         totalAmount: order.totalAmount,
-        //         user: {
-        //             name: user.name,
-        //             email: user.email,
-        //             phone: user.phone,
-        //         }
-        //     }
-        // });
-
-        if ( order.paymentStatus = 'Successful'  ) {
-            const successMessage = `Payment Successful! Order ID:  Total: ₹${order.totalAmount}`;
-            return res.redirect(`http://localhost:5173/?status=success&message=${encodeURIComponent(successMessage)}`);
-          } else {
-            return res.redirect('http://localhost:5173/?status=failed&message=Payment failed. Please try again.');
-          }
-
+        throw new Error('Tour PDF not found');
+      });
+  
+      const pdfPaths = await Promise.all(tourPromises);
+  
+      const successMessage = `Payment Successful! Order ID: ${order._id} Total: ₹${order.totalAmount}`;
+  
+      // Send all PDFs via WhatsApp (as attachments in one message)
+      await sendWhatsAppMessage(user.phone, pdfPaths);
+  
+      const successRedirectUrl = `http://localhost:5173/?status=success&message=${encodeURIComponent(successMessage)}`;
+      return res.redirect(successRedirectUrl);
+  
     } catch (error) {
-        console.error('Payment success handling failed:', error);
-        res.status(500).json({ message: 'Failed to handle payment success' });
+      console.error('Payment success handling failed:', error);
+      res.status(500).json({ message: 'Failed to handle payment success' });
     }
-};
-
+  };
 // Handle PayU payment failure callback
 exports.paymentFailure = async (req, res) => {
     const receivedParams = req.body;
