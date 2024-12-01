@@ -3,55 +3,67 @@ const fs = require('fs');
 const path = require('path');
 
 exports.createTour = async (req, res) => {
-    try {
-        console.log('Request Body:', req.body);
-      console.log('Request Files:', req.files);
-      const {
-        id,
-        name,
-        category,
-        details,
-        duration,
-        days,
-        price,
-        image,
-        usp,
-        whyToChoose,
-        content,
-        additionalImages,
-      } = req.body;
-      console.log('Request Body:', req.body);
-      console.log('Request Files:', req.files);
-      
-      if (!req.files || !req.files.pdf || req.files.pdf.length === 0) {
-        return res.status(400).json({ error: 'PDF file is required' });
-      }
-  
-      const pdfPath = req.files.pdf[0].path;
-  
-      const tour = new Tour({
-        id,
-        name,
-        category,
-        details,
-        duration,
-        days,
-        price,
-        image,
-        usp,
-        whyToChoose,
-        content,
-        additionalImages: JSON.parse(additionalImages || '[]'),
-        pdfPath, 
-      });
-  
-      await tour.save();
-      res.status(201).json({ success: 'Tour created successfully', data: tour });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to create tour' });
+  try {
+    console.log('Request Body:', req.body);
+    console.log('Request Files:', req.files);
+
+    const {
+      id,
+      name,
+      category,
+      details,
+      duration,
+      days,
+      price,
+      image,
+      usp,
+      whyToChoose,
+      content,
+      additionalImages,
+      available,  // New field for availability
+    } = req.body;
+
+    // Log request body and files for debugging
+    console.log('Request Body:', req.body);
+    console.log('Request Files:', req.files);
+
+    // Check if PDF is provided
+    if (!req.files || !req.files.pdf || req.files.pdf.length === 0) {
+      return res.status(400).json({ error: 'PDF file is required' });
     }
-  };
+
+    // Get the PDF path from uploaded files
+    const pdfPath = req.files.pdf[0].path;
+
+    // Create a new tour document with the available field
+    const tour = new Tour({
+      id,
+      name,
+      category,
+      details,
+      duration,
+      days,
+      price,
+      image,
+      usp,
+      whyToChoose,
+      content,
+      additionalImages: JSON.parse(additionalImages || '[]'),
+      pdfPath,
+      available: available !== undefined ? available : true, // Default to true if not provided
+    });
+
+    // Save the tour to the database
+    await tour.save();
+
+    // Send success response
+    res.status(201).json({ success: 'Tour created successfully', data: tour });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create tour' });
+  }
+};
+
   
 
 // Retrieve a tour's PDF by ID
