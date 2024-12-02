@@ -4,8 +4,8 @@ const path = require('path');
 
 exports.createTour = async (req, res) => {
   try {
-    console.log('Request Body:', req.body);
-    console.log('Request Files:', req.files);
+    // console.log('Request Body:', req.body);
+    // console.log('Request Files:', req.files);
 
     const {
       id,
@@ -24,8 +24,8 @@ exports.createTour = async (req, res) => {
     } = req.body;
 
     // Log request body and files for debugging
-    console.log('Request Body:', req.body);
-    console.log('Request Files:', req.files);
+    // console.log('Request Body:', req.body);
+    // console.log('Request Files:', req.files);
 
     // Check if PDF is provided
     if (!req.files || !req.files.pdf || req.files.pdf.length === 0) {
@@ -155,9 +155,9 @@ exports.getAllTours = async (req, res) => {
         if (query.price) {
             filter.price = { $lte: query.price }; // Assuming you want tours under a certain price
         }
-console.log('Filter:', filter);
+// console.log('Filter:', filter);
         const tours = await Tour.find(filter); // Fetch tours from the database with filters if any
-console.log('Tours:', tours);
+// console.log('Tours:', tours);
         // Check if the result array is empty and respond accordingly
         if (tours.length === 0) {
             return res.status(404).json({ message: 'No tours found matching the criteria' });

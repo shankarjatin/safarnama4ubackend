@@ -126,14 +126,78 @@ exports.paymentSuccess = async (req, res) => {
 
     const pdfPaths = await Promise.all(tourPromises);
 
-    const successMessage = `Payment Successful! Order ID: ${order._id} Total: ₹${order.totalAmount}`;
+    const successMessage = `Your itinerary pdf! Order ID: ${order._id} Total: ₹${order.totalAmount}`;
 
     // Send all PDFs via WhatsApp (as attachments in one message)
-    await sendWhatsAppMessage(user.phone, pdfPaths);
+    // await sendWhatsAppMessage(user.phone, pdfPaths);
 
     // Send email with PDF attachments
     const emailSubject = `Your Order Receipt: ${order._id}`;
-    const emailText = `Hello ${user.name},\n\nYour payment was successful. Please find attached the receipt for your order.\n\nTotal: ₹${order.totalAmount}\nOrder ID: ${order._id}\n\nThank you for your purchase!`;
+    const emailText = `
+    <html>
+      <head>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            line-height: 1.6;
+            background-color: #f4f4f4;
+            padding: 20px;
+          }
+          .email-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            margin: 0 auto;
+          }
+          h1 {
+            font-size: 24px;
+            color: #333;
+          }
+          p {
+            font-size: 16px;
+            color: #555;
+          }
+          .order-info {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 20px;
+          }
+          .order-info strong {
+            color: #333;
+          }
+          .footer {
+            font-size: 14px;
+            color: #888;
+            text-align: center;
+            margin-top: 20px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="email-container">
+          <h1>Payment Successful</h1>
+          <p>Hello ${user.name},</p>
+          <p>Your payment was successful. Please find the details of your order below:</p>
+          
+          <div class="order-info">
+            <p><strong>Total:</strong> ₹${order.totalAmount}</p>
+            <p><strong>Order ID:</strong> ${order._id}</p>
+          </div>
+          
+          <p>Thank you for your purchase!</p>
+          
+          <div class="footer">
+            <p>If you have any questions, feel free to contact our support team.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+  
     await sendEmail(user.email, emailSubject, emailText, pdfPaths);
 
     const successRedirectUrl = `http://localhost:5173/?status=success&message=${encodeURIComponent(successMessage)}`;
