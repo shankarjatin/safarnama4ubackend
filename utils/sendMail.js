@@ -19,7 +19,7 @@ const sendEmail = async (to, subject, text, pdfPaths) => {
       from: process.env.EMAIL_USER,
       to: to,  // Recipient's email address
       subject: subject,  // Subject of the email
-      text: text,  // Email body text
+      html: text,  // Email body text
       attachments: attachments,  // Attach the PDFs
     };
 
