@@ -200,7 +200,7 @@ exports.paymentSuccess = async (req, res) => {
   
     await sendEmail(user.email, emailSubject, emailText, pdfPaths);
 
-    const successRedirectUrl = `http://localhost:5173/?status=success&message=${encodeURIComponent(successMessage)}`;
+    const successRedirectUrl = `${process.env.FRONTEND_URL}?status=success&message=${encodeURIComponent(successMessage)}`;
     return res.redirect(successRedirectUrl);
 
   } catch (error) {
