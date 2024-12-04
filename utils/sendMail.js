@@ -43,6 +43,7 @@ const sendEmail = async (to, subject, text, pdfPaths) => {
   try {
     // Ensure all paths are resolved correctly for the current operating system
     const attachments = pdfPaths.map(pdfPath => {
+      // Normalize the file path, ensuring the path is valid for the Linux environment
       const filePath = path.resolve(__dirname, '../uploads', pdfPath); // Resolve the file path correctly
 
       // Check if file exists before attaching
