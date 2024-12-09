@@ -12,7 +12,7 @@ exports.createOrder = async (req, res) => {
 
     try {
         // Check if user exists or create a new one
-        let user = await User.findOne({ phone: userId });
+        let user = await User.findOne({ email: email });
         if (!user) {
             user = new User({
                 name,
@@ -85,6 +85,7 @@ exports.createOrder = async (req, res) => {
 
 exports.paymentSuccess = async (req, res) => {
   const receivedParams = req.body;
+  console.log(receivedParams);
 
   if (!receivedParams.hash) {
     return res.status(400).send('Hash parameter is missing');
@@ -103,6 +104,7 @@ exports.paymentSuccess = async (req, res) => {
     await order.save();
 
     const user = await User.findById(order.user);
+
     if (user) {
       if (!user.orders.includes(order._id)) {
         user.orders.push(order);
@@ -197,7 +199,7 @@ exports.paymentSuccess = async (req, res) => {
       </body>
     </html>
   `;
-  
+   console.log(user.email);
     await sendEmail(user.email, emailSubject, emailText, pdfPaths);
 
     const successRedirectUrl = `${process.env.FRONTEND_URL}?status=success&message=${encodeURIComponent(successMessage)}`;
