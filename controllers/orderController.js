@@ -72,7 +72,8 @@ exports.createOrder = async (req, res) => {
         // Respond with payment parameters
         res.json({
             paymentParams,
-            payuUrl: 'https://test.payu.in/_payment' // Use 'https://secure.payu.in/_payment' for production
+            payuUrl: 'https://secure.payu.in/_payment' // Use 'https://test.payu.in/_payment' for production
+            
         });
     } catch (error) {
         console.error('Order creation failed:', error);
