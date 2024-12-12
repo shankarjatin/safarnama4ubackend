@@ -261,19 +261,29 @@ exports.createOrder = async (req, res) => {
 
 
 
+// Replace with your email utility
+
 exports.verifyPayment = async (req, res) => {
-  const { orderId, paymentId, signature, notes } = req.body;
+  const { orderId, paymentId, notes } = req.body;
   const { name, email, phone, cartItems } = notes;
 
   try {
-    // Create hmac object for signature verification
-    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
-    hmac.update(`${orderId}|${paymentId}`);
-    const generatedSignature = hmac.digest('hex');
+    // Fetch payment details from Razorpay
+    const paymentResponse = await axios.get(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+      auth: {
+        username: process.env.RAZORPAY_KEY_ID,
+        password: process.env.RAZORPAY_KEY_SECRET,
+      },
+    });
 
-    // Verify signature
-    if (generatedSignature !== signature) {
-      return res.status(400).json({ message: 'Payment verification failed' });
+    const paymentDetails = paymentResponse.data;
+
+    // Check payment status
+    if (paymentDetails.status !== 'captured') {
+      return res.status(400).json({
+        message: 'Payment verification failed',
+        paymentStatus: paymentDetails.status,
+      });
     }
 
     // Check if user exists or create a new one
@@ -283,28 +293,32 @@ exports.verifyPayment = async (req, res) => {
         name,
         email,
         phone,
-        orders: []
+        orders: [],
       });
       await user.save();
     }
 
     // Prepare cart items with product details
-    const populatedCartItems = await Promise.all(cartItems.map(async (item) => {
-      const product = await Tour.findById(item._id);
-      if (!product) {
-        throw new Error('Product not found');
-      }
+    const populatedCartItems = await Promise.all(
+      cartItems.map(async (item) => {
+        const product = await Tour.findById(item._id);
+        if (!product) {
+          throw new Error('Product not found');
+        }
 
-      return {
-        product: product._id,
-        quantity: item.quantity,
-        price: product.price
-      };
-    }));
+        return {
+          product: product._id,
+          quantity: item.quantity,
+          price: product.price,
+        };
+      })
+    );
 
     // Calculate total amount
-    const totalAmount = populatedCartItems.reduce((total, item) => 
-      total + (item.price * item.quantity), 0);
+    const totalAmount = populatedCartItems.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0
+    );
 
     // Create a new order
     const newOrder = new Order({
@@ -312,14 +326,14 @@ exports.verifyPayment = async (req, res) => {
       cartItems: populatedCartItems,
       totalAmount: totalAmount,
       paymentStatus: 'Successful',
-      paymentId: paymentId // Store Razorpay payment ID
+      paymentId: paymentId, // Store Razorpay payment ID
     });
 
     await newOrder.save();
 
     // Link the order to the user
     user.orders.push(newOrder._id);
-    
+
     // Clear user's cart
     user.cartItems = [];
     await user.save();
@@ -406,31 +420,32 @@ exports.verifyPayment = async (req, res) => {
     // Send email with PDF attachments
     await sendEmail(user.email, emailSubject, emailText, pdfPaths);
 
-    // Optional: Send WhatsApp message (commented out as in previous implementation)
-    // await sendWhatsAppMessage(user.phone, pdfPaths);
-
     // Prepare success redirect
-    const successMessage = `PDF of itinerary sent to yout email`
-    const successRedirectUrl = `${process.env.FRONTEND_URL}?status=success&message=${encodeURIComponent(successMessage)}`;
+    const successMessage = `PDF of itinerary sent to your email`;
+    const successRedirectUrl = `${process.env.FRONTEND_URL}?status=success&message=${encodeURIComponent(
+      successMessage
+    )}`;
 
     res.json({
       message: 'Payment successful',
-      redirectUrl: successRedirectUrl
+      redirectUrl: successRedirectUrl,
     });
-
   } catch (error) {
     console.error('Payment success handling failed:', error);
-    
+
     // Prepare error redirect
     const errorMessage = 'Payment processing failed. Please contact support.';
-    const errorRedirectUrl = `${process.env.FRONTEND_URL}?status=failed&message=${encodeURIComponent(errorMessage)}`;
+    const errorRedirectUrl = `${process.env.FRONTEND_URL}?status=failed&message=${encodeURIComponent(
+      errorMessage
+    )}`;
 
     res.status(500).json({
       message: 'Failed to handle payment success',
-      redirectUrl: errorRedirectUrl
+      redirectUrl: errorRedirectUrl,
     });
   }
 };
+
 
 // Failure handler (similar to previous implementation)
 exports.paymentFailure = async (req, res) => {
