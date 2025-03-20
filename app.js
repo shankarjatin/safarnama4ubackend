@@ -7,7 +7,7 @@ const order = require('./routes/orderRoutes');
 const cutomer = require('./routes/customerRoutes');
 const cors = require('cors');
 const path = require('path');
-const cron = require('cron');
+// const cron = require('cron');
 
 
 dotenv.config();
@@ -34,16 +34,16 @@ app.get('/', (req, res) => {
 });
 
 // Schedule a cron job to run every 5 minutes to keep the server alive
-cron.schedule('**/2 * * * * *', async () => {
-  try {
-    console.log('Pinging server to keep it awake...');
-    // Change this to your actual server's public URL
-    await axios.get('https://safarnama4ubackend.onrender.com');
-    console.log('Server pinged successfully');
-  } catch (error) {
-    console.error('Error pinging the server:', error.message);
-  }
-});
+// cron.schedule('**/2 * * * * *', async () => {
+//   try {
+//     console.log('Pinging server to keep it awake...');
+//     // Change this to your actual server's public URL
+//     await axios.get('https://safarnama4ubackend.onrender.com');
+//     console.log('Server pinged successfully');
+//   } catch (error) {
+//     console.error('Error pinging the server:', error.message);
+//   }
+// });
 const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {
